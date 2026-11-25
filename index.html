@@ -123,7 +123,7 @@
             <!-- 결과 화면에서 내 그림 크기·위치에 자동 맞춤되는 정답 오버레이 캔버스 -->
             <canvas id="overlayCanvas" width="500" height="500" class="hidden absolute inset-0 w-full h-full pointer-events-none"></canvas>
 
-            <!-- [READY 오버레이] 그림 그리기 획수 : 최대 7회 + START 버튼 -->
+            <!-- [READY 오버레이] 그림 그리기 획수 : 최대 10회 + START 버튼 -->
             <div id="readyOverlay" class="absolute inset-0 bg-white/92 backdrop-blur-[2px] flex flex-col items-center justify-center p-5 text-center space-y-4">
               <div class="space-y-2">
                 <span class="inline-block px-3.5 py-1 bg-amber-100 text-amber-800 font-bold rounded-full text-xs md:text-sm">
@@ -205,7 +205,7 @@
 
       <!-- [실시간 Top 100 랭킹 영역] -->
       <aside id="rankSection" class="hidden lg:block lg:col-span-5 bg-white rounded-3xl shadow-md border border-gray-100 p-4 md:p-6">
-        <div class="flex items-center justify-between mb-3">
+        <div class="flex items-center justify-between mb-1.5">
           <h2 class="text-base md:text-lg font-extrabold text-gray-900 flex items-center gap-1.5">
             🏆 실시간 TOP 100
           </h2>
@@ -213,6 +213,9 @@
             새로고침
           </button>
         </div>
+        <p class="text-[11px] md:text-xs text-gray-400 mb-3">
+          ※ 기기별 고유 ID 기준 최고 점수만 반영됩니다.
+        </p>
 
         <div id="leaderboardList" class="leaderboard-scroll max-h-[65vh] lg:max-h-[580px] overflow-y-auto divide-y divide-gray-100 pr-1">
           <p class="py-10 text-center text-sm text-gray-400">랭킹 불러오는 중...</p>
@@ -231,7 +234,7 @@
 
     // 게임 및 채점 설정
     const SCORE_SENSITIVITY_K = 0.16; // 점수가 너무 짜면 0.13, 후하면 0.19로 조절
-    const MAX_STROKES = 10;            // 최대 획수 7회
+    const MAX_STROKES = 10;           // 최대 획수 10회
     const PREVIEW_SECONDS = 3;        // 시작 전 미리보기 3초
     const FACE_CROP_RATIO = 0.755;    // 하단 GANADI 글자 제외 (상단 75.5% 얼굴만 사용)
     const GRID_SIZE = 64;
@@ -267,20 +270,18 @@
 
     const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// 브라우저별 고유 식별자 자동 발급 (동명 닉네임 구분용)
-function getDeviceId() {
-  let id = localStorage.getItem('ganadi_device_id');
-  if (!id) {
-    id = (window.crypto && crypto.randomUUID)
-      ? crypto.randomUUID()
-      : 'dev-' + Date.now() + '-' + Math.random().toString(36).slice(2);
-    localStorage.setItem('ganadi_device_id', id);
-  }
-  return id;
-}
-const deviceId = getDeviceId();
-
-// 상태 변수
+    // 브라우저별 고유 식별자 자동 발급 (동명 닉네임 구분용)
+    function getDeviceId() {
+      let id = localStorage.getItem('ganadi_device_id');
+      if (!id) {
+        id = (window.crypto && crypto.randomUUID)
+          ? crypto.randomUUID()
+          : 'dev-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+        localStorage.setItem('ganadi_device_id', id);
+      }
+      return id;
+    }
+    const deviceId = getDeviceId();
 
     // 상태 변수
     let nickname = '';
@@ -553,7 +554,7 @@ const deviceId = getDeviceId();
     }
 
     // =========================================================================
-    // 2. 드로잉 캔버스 (최대 7획 제어 + 모바일 터치 최적화)
+    // 2. 드로잉 캔버스 (최대 10획 제어 + 모바일 터치 최적화)
     // =========================================================================
     function getCanvasPos(e) {
       const rect = canvas.getBoundingClientRect();
@@ -728,10 +729,10 @@ const deviceId = getDeviceId();
 
       try {
         const { data, error } = await db.rpc('submit_score', {
-  p_device_id: deviceId,
-  p_nickname: nickname,
-  p_score: score
-});
+          p_device_id: deviceId,
+          p_nickname: nickname,
+          p_score: score
+        });
         if (!error && data) {
           const row = Array.isArray(data) ? data[0] : data;
           if (row) {
