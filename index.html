@@ -807,6 +807,8 @@ const deviceId = getDeviceId();
     // 4. 결과 이미지 카드 생성 및 저장 (모바일 공유 시트 + PC 다운로드)
     // =========================================================================
     function drawWrappedText(c, text, x, y, maxWidth, lineHeight) {
+      c.textAlign = 'center';
+      c.textBaseline = 'middle';
       const words = text.split(' ');
       let line = '';
       const lines = [];
@@ -864,9 +866,10 @@ const deviceId = getDeviceId();
         850
       );
 
+      c.textAlign = 'center';
       c.fillStyle = '#2563EB';
-      c.font = 'bold 30px Pretendard, sans-serif';
-      drawWrappedText(c, getTierMessage(lastResult.score), 400, 955, 680, 44);
+      c.font = 'bold 28px -apple-system, BlinkMacSystemFont, Pretendard, sans-serif';
+      drawWrappedText(c, getTierMessage(lastResult.score), 400, 955, 620, 42);
 
       card.toBlob(async (blob) => {
         const fileName = `ganadi-${lastResult.score.toFixed(2)}.png`;
