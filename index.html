@@ -2,55 +2,72 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>가나디 정확하게 그리기 테스트</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#FFFDF7" />
+  <meta property="og:title" content="가나디 정확하게 그리기 테스트" />
+  <meta property="og:description" content="3초 보고 7획 안에 가나디 얼굴을 그려 정확도를 측정해 보세요!" />
+  <title>가나디 정확하게 그리기</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
-    body {
+    html, body {
       font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
       background-color: #FFFDF7;
       color: #1F2937;
+      overscroll-behavior-y: contain;
+      -webkit-tap-highlight-color: transparent;
     }
     #drawCanvas {
       touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
       cursor: crosshair;
     }
-    .leaderboard-scroll::-webkit-scrollbar { width: 6px; }
+    .leaderboard-scroll::-webkit-scrollbar { width: 5px; }
     .leaderboard-scroll::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 9999px; }
   </style>
 </head>
-<body class="min-h-screen py-6 px-4">
+<body class="min-h-screen py-4 px-3 md:py-6 md:px-4">
 
-  <div class="max-w-5xl mx-auto">
+  <div class="max-w-md lg:max-w-5xl mx-auto">
     <!-- 상단 타이틀 -->
-    <header class="text-center mb-6">
-      <h1 class="text-3xl md:text-4xl font-extrabold tracking-tight text-gray-900">
+    <header class="text-center mb-3 md:mb-5">
+      <h1 class="text-2xl md:text-4xl font-extrabold tracking-tight text-gray-900">
         가나디 정확하게 그리기
       </h1>
-      <p class="text-sm md:text-base text-gray-500 mt-1">
-        3초 동안 가나디를 기억한 뒤, 최대 6획 안에 똑같이 그려보세요!
+      <p class="text-xs md:text-base text-gray-500 mt-1">
+        3초 동안 기억한 뒤, <b>최대 7획</b>으로 똑같이 그려보세요!
       </p>
     </header>
 
+    <!-- 모바일 전용 탭 (그리기 / TOP 100 전환) -->
+    <div class="lg:hidden grid grid-cols-2 gap-1.5 bg-amber-100/70 p-1 rounded-2xl mb-3">
+      <button id="mobileTabGame" class="py-2.5 text-sm font-extrabold rounded-xl bg-white text-gray-900 shadow-sm transition">
+        🎨 그리기
+      </button>
+      <button id="mobileTabRank" class="py-2.5 text-sm font-bold rounded-xl text-gray-600 transition">
+        🏆 TOP 100
+      </button>
+    </div>
+
     <!-- 정답 이미지 미업로드 안내 배너 -->
-    <div id="templateErrorBanner" class="hidden max-w-2xl mx-auto mb-4 p-3 bg-amber-50 border border-amber-300 text-amber-800 rounded-xl text-sm text-center">
+    <div id="templateErrorBanner" class="hidden max-w-2xl mx-auto mb-3 p-3 bg-amber-50 border border-amber-300 text-amber-800 rounded-xl text-xs md:text-sm text-center">
       ⚠️ 정답 이미지(<b>ganadi.png</b>)를 찾을 수 없습니다. GitHub 보관함에 <b>ganadi.png</b> 파일을 올려주세요!
     </div>
 
-    <!-- 메인 2단 레이아웃 -->
-    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+    <!-- 메인 레이아웃 (모바일: 탭 전환 1단 / PC: 좌우 2단) -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
 
-      <!-- 왼쪽: 게임 카드 -->
-      <main class="lg:col-span-7 bg-white rounded-3xl shadow-lg border border-gray-100 p-5 md:p-7">
+      <!-- [게임 영역] -->
+      <main id="gameSection" class="lg:col-span-7 bg-white rounded-3xl shadow-md border border-gray-100 p-4 md:p-6">
 
         <!-- [1단계] 닉네임 입력 화면 -->
-        <section id="screenNickname" class="py-10 text-center space-y-5">
+        <section id="screenNickname" class="py-8 md:py-10 text-center space-y-5">
           <div class="text-5xl">🐶</div>
           <div>
-            <h2 class="text-xl font-bold text-gray-800">도전자 닉네임을 입력해 주세요</h2>
-            <p class="text-sm text-gray-500 mt-1">최종 정확도가 오른쪽 Top 100 랭킹에 등록됩니다.</p>
+            <h2 class="text-lg md:text-xl font-bold text-gray-800">도전자 닉네임을 입력해 주세요</h2>
+            <p class="text-xs md:text-sm text-gray-500 mt-1">최종 정확도가 실시간 Top 100 랭킹에 등록됩니다.</p>
           </div>
           <form id="nicknameForm" class="max-w-xs mx-auto space-y-3">
             <input
@@ -59,11 +76,11 @@
               maxlength="12"
               required
               placeholder="닉네임 (최대 12자)"
-              class="w-full px-4 py-3 text-center text-lg font-semibold border-2 border-gray-200 rounded-2xl focus:outline-none focus:border-blue-500 transition"
+              class="w-full px-4 py-3 text-center text-base md:text-lg font-semibold border-2 border-gray-200 rounded-2xl focus:outline-none focus:border-blue-500 transition"
             />
             <button
               type="submit"
-              class="w-full py-3.5 bg-gray-900 hover:bg-black text-white font-bold rounded-2xl transition shadow-sm"
+              class="w-full py-3.5 bg-gray-900 hover:bg-black active:scale-[0.99] text-white font-bold rounded-2xl transition shadow-sm"
             >
               입장하기
             </button>
@@ -71,63 +88,70 @@
         </section>
 
         <!-- [2~4단계] 캔버스 게임 화면 -->
-        <section id="screenGame" class="hidden space-y-4">
+        <section id="screenGame" class="hidden space-y-3">
           <!-- 상단 플레이어 정보 & 획수 표시 -->
-          <div class="flex items-center justify-between bg-gray-50 px-4 py-3 rounded-2xl">
-            <div class="flex items-center gap-2">
-              <span class="text-sm text-gray-500">도전자</span>
-              <span id="displayNickname" class="font-bold text-gray-900"></span>
-              <button id="btnChangeNick" class="text-xs text-gray-400 underline hover:text-gray-600 ml-1">변경</button>
+          <div class="flex items-center justify-between bg-gray-50 px-3.5 py-2.5 rounded-2xl">
+            <div class="flex items-center gap-1.5 min-w-0">
+              <span class="text-xs text-gray-500 shrink-0">도전자</span>
+              <span id="displayNickname" class="font-bold text-sm text-gray-900 truncate"></span>
+              <button id="btnChangeNick" class="text-xs text-gray-400 underline hover:text-gray-600 shrink-0 ml-0.5">변경</button>
             </div>
-            <div class="flex items-center gap-2">
-              <span class="text-sm font-medium text-gray-600">사용 획수</span>
-              <span id="strokeBadge" class="px-3 py-1 bg-blue-100 text-blue-700 font-extrabold rounded-full text-sm">
-                0 / 6
+            <div class="flex items-center gap-1.5 shrink-0">
+              <span class="text-xs font-medium text-gray-600">획수</span>
+              <span id="strokeBadge" class="px-2.5 py-1 bg-blue-100 text-blue-700 font-extrabold rounded-full text-xs md:text-sm">
+                0 / 7
               </span>
             </div>
           </div>
 
-          <!-- 정사각형 드로잉 캔버스 박스 -->
-          <div class="relative w-full max-w-[440px] mx-auto aspect-square bg-white border-2 border-gray-200 rounded-2xl overflow-hidden shadow-inner">
-            <!-- 결과 화면에서 정답(글자 제외 얼굴만) 겹쳐보기용 이미지 -->
-            <img
-              id="overlayTemplateImg"
-              alt="정답 가나디 얼굴"
-              class="hidden absolute inset-0 w-full h-full object-contain opacity-30 pointer-events-none select-none p-8"
-            />
+          <!-- 가나디 쉽게 그리는 법 팁 박스 -->
+          <div class="bg-amber-50/80 border border-amber-200/80 rounded-2xl px-3.5 py-2.5 text-left">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-extrabold text-amber-900">💡 7획으로 가나디 쉽게 그리는 법</span>
+              <span class="text-[11px] text-amber-700 font-medium">크기 상관없이 비율로 채점!</span>
+            </div>
+            <p class="text-[11px] md:text-xs text-amber-800/90 mt-1 leading-relaxed">
+              <b>①</b> 왼쪽 귀 → <b>②</b> 윗머리+오른쪽 귀 이어 그리기 → <b>③</b> U자 턱선 → <b>④·⑤</b> 눈 콕콕(약간 넓게) → <b>⑥</b> 작은 코 → <b>⑦</b> 턱선 위 <span class="font-bold">ω</span> 입
+            </p>
+          </div>
 
+          <!-- 정사각형 드로잉 캔버스 박스 -->
+          <div class="relative w-full max-w-[420px] mx-auto aspect-square bg-white border-2 border-gray-200 rounded-2xl overflow-hidden shadow-inner">
             <!-- 실제 그림을 그리는 캔버스 -->
             <canvas id="drawCanvas" width="500" height="500" class="w-full h-full block"></canvas>
 
-            <!-- [READY 오버레이] 그림 그리기 획수 : 최대 6회 + START 버튼 -->
-            <div id="readyOverlay" class="absolute inset-0 bg-white/90 backdrop-blur-[2px] flex flex-col items-center justify-center p-6 text-center space-y-5">
+            <!-- 결과 화면에서 내 그림 크기·위치에 자동 맞춤되는 정답 오버레이 캔버스 -->
+            <canvas id="overlayCanvas" width="500" height="500" class="hidden absolute inset-0 w-full h-full pointer-events-none"></canvas>
+
+            <!-- [READY 오버레이] 그림 그리기 획수 : 최대 7회 + START 버튼 -->
+            <div id="readyOverlay" class="absolute inset-0 bg-white/92 backdrop-blur-[2px] flex flex-col items-center justify-center p-5 text-center space-y-4">
               <div class="space-y-2">
-                <span class="inline-block px-3.5 py-1 bg-amber-100 text-amber-800 font-bold rounded-full text-sm">
-                  그림 그리기 획수 : 최대 6회
+                <span class="inline-block px-3.5 py-1 bg-amber-100 text-amber-800 font-bold rounded-full text-xs md:text-sm">
+                  그림 그리기 획수 : 최대 7회
                 </span>
-                <h3 class="text-xl font-extrabold text-gray-900">
+                <h3 class="text-lg md:text-xl font-extrabold text-gray-900">
                   가나디 얼굴을 그려주세요!
                 </h3>
                 <p class="text-xs text-gray-500 leading-relaxed">
-                  START를 누르면 가나디가 <b>3초 동안</b> 나타납니다.<br/>
-                  사라진 뒤 글자는 빼고 <b>얼굴만</b> 그려주세요!
+                  START를 누르면 가나디 얼굴이 <b>3초 동안</b> 나타납니다.<br/>
+                  작게 그려도 크기를 자동 보정해 채점해 드려요!
                 </p>
               </div>
               <button
                 id="btnStart"
-                class="px-10 py-4 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xl font-extrabold rounded-2xl shadow-md transition"
+                class="px-10 py-3.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-lg md:text-xl font-extrabold rounded-2xl shadow-md transition"
               >
                 START
               </button>
             </div>
 
-            <!-- [PREVIEW 오버레이] 시작 전 3초간 원본 가나디 사진 표시 -->
-            <div id="previewOverlay" class="hidden absolute inset-0 bg-white flex flex-col items-center justify-center p-4 select-none">
-              <div class="absolute top-3 left-1/2 -translate-x-1/2 z-10 px-4 py-1.5 bg-gray-900/90 text-white text-sm font-extrabold rounded-full shadow">
-                잘 기억하세요! <span id="previewTimer" class="text-amber-300 text-base ml-1">3</span>초
+            <!-- [PREVIEW 오버레이] 시작 전 3초간 글자 없는 가나디 얼굴 표시 -->
+            <div id="previewOverlay" class="hidden absolute inset-0 bg-white flex flex-col items-center justify-center p-5 select-none">
+              <div class="absolute top-3 left-1/2 -translate-x-1/2 z-10 px-4 py-1.5 bg-gray-900/90 text-white text-xs md:text-sm font-extrabold rounded-full shadow">
+                잘 기억하세요! <span id="previewTimer" class="text-amber-300 text-sm md:text-base ml-1">3</span>초
               </div>
               <img
-                src="./ganadi.png"
+                id="previewFaceImg"
                 alt="가나디 미리보기"
                 class="w-full h-full object-contain pt-8 pb-2 pointer-events-none"
               />
@@ -135,43 +159,42 @@
           </div>
 
           <!-- [DRAWING 컨트롤 버튼] -->
-          <div id="drawingControls" class="hidden max-w-[440px] mx-auto space-y-2">
-            <p class="text-center text-xs text-gray-400">※ 아래 GANADI 글자는 빼고 얼굴만 그려주세요</p>
+          <div id="drawingControls" class="hidden max-w-[420px] mx-auto">
             <button
               id="btnScoreNow"
               disabled
-              class="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold rounded-2xl transition shadow-sm"
+              class="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold rounded-2xl transition shadow-sm"
             >
               바로 채점하기
             </button>
           </div>
 
           <!-- [RESULT 결과 영역] -->
-          <div id="resultPanel" class="hidden max-w-[440px] mx-auto bg-blue-50/70 border border-blue-100 rounded-2xl p-5 text-center space-y-4">
+          <div id="resultPanel" class="hidden max-w-[420px] mx-auto bg-blue-50/80 border border-blue-100 rounded-2xl p-4 md:p-5 text-center space-y-3.5">
             <div>
-              <p class="text-xs font-semibold text-blue-600 uppercase tracking-wider">정확도 측정 결과</p>
-              <div id="resultScore" class="text-5xl font-black text-gray-900 mt-1">0.00%</div>
-              <p id="resultRank" class="text-sm font-bold text-gray-600 mt-1">순위 계산 중...</p>
+              <p class="text-xs font-semibold text-blue-600">정확도 측정 결과</p>
+              <div id="resultScore" class="text-4xl md:text-5xl font-black text-gray-900 mt-1">0.00%</div>
+              <p id="resultRank" class="text-xs md:text-sm font-bold text-gray-600 mt-1">순위 계산 중...</p>
             </div>
 
-            <div id="resultMessage" class="bg-white px-4 py-3 rounded-xl text-sm md:text-base font-bold text-blue-700 shadow-sm break-keep">
+            <div id="resultMessage" class="bg-white px-3.5 py-2.5 rounded-xl text-sm font-bold text-blue-700 shadow-sm break-keep">
             </div>
 
-            <label class="inline-flex items-center gap-2 text-xs font-semibold text-gray-600 cursor-pointer select-none">
+            <label class="inline-flex items-center gap-2 text-xs font-bold text-gray-700 cursor-pointer select-none bg-white/80 px-3 py-1.5 rounded-full border border-blue-100">
               <input id="toggleOverlay" type="checkbox" class="w-4 h-4 rounded accent-blue-600" />
-              정답 가나디 얼굴 겹쳐보기
+              내 그림 크기에 맞춰 정답 겹쳐보기
             </label>
 
-            <div class="grid grid-cols-2 gap-3 pt-1">
+            <div class="grid grid-cols-2 gap-2.5 pt-1">
               <button
                 id="btnSaveResult"
-                class="py-3 bg-gray-900 hover:bg-black text-white font-bold rounded-xl transition shadow-sm"
+                class="py-3 bg-gray-900 hover:bg-black active:scale-[0.98] text-white text-sm font-bold rounded-xl transition shadow-sm"
               >
                 결과 저장
               </button>
               <button
                 id="btnRetry"
-                class="py-3 bg-white hover:bg-gray-100 text-gray-800 border border-gray-300 font-bold rounded-xl transition"
+                class="py-3 bg-white hover:bg-gray-100 active:scale-[0.98] text-gray-800 border border-gray-300 text-sm font-bold rounded-xl transition"
               >
                 다시 도전
               </button>
@@ -180,10 +203,10 @@
         </section>
       </main>
 
-      <!-- 오른쪽: 실시간 Top 100 랭킹 -->
-      <aside class="lg:col-span-5 bg-white rounded-3xl shadow-lg border border-gray-100 p-5 md:p-6">
-        <div class="flex items-center justify-between mb-4">
-          <h2 class="text-lg font-extrabold text-gray-900 flex items-center gap-2">
+      <!-- [실시간 Top 100 랭킹 영역] -->
+      <aside id="rankSection" class="hidden lg:block lg:col-span-5 bg-white rounded-3xl shadow-md border border-gray-100 p-4 md:p-6">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-base md:text-lg font-extrabold text-gray-900 flex items-center gap-1.5">
             🏆 실시간 TOP 100
           </h2>
           <button id="btnRefreshRank" class="text-xs px-2.5 py-1 bg-gray-100 hover:bg-gray-200 text-gray-600 font-semibold rounded-lg transition">
@@ -191,7 +214,7 @@
           </button>
         </div>
 
-        <div id="leaderboardList" class="leaderboard-scroll max-h-[560px] overflow-y-auto divide-y divide-gray-100 pr-1">
+        <div id="leaderboardList" class="leaderboard-scroll max-h-[65vh] lg:max-h-[580px] overflow-y-auto divide-y divide-gray-100 pr-1">
           <p class="py-10 text-center text-sm text-gray-400">랭킹 불러오는 중...</p>
         </div>
       </aside>
@@ -201,16 +224,16 @@
 
   <script>
     // =========================================================================
-    // Supabase 연결 설정 (적용 완료)
+    // Supabase 연결 설정
     // =========================================================================
     const SUPABASE_URL = 'https://opnmtqofggcmmibghttv.supabase.co';
     const SUPABASE_KEY = 'sb_publishable_S8c_AK5mGpszlSuRgfusew_B0e9i1CF';
 
-    // 채점 난이도 보정 상수 (점수가 너무 짜면 0.13으로 낮추고, 너무 후하면 0.19로 높이세요)
-    const SCORE_SENSITIVITY_K = 0.16;
-    const MAX_STROKES = 6;
-    const PREVIEW_SECONDS = 3; // 시작 전 미리보기 시간(초)
-    const FACE_CROP_RATIO = 0.755; // 원본 이미지 상단 75.5%만 채점에 사용 (하단 GANADI 글자 제외)
+    // 게임 및 채점 설정
+    const SCORE_SENSITIVITY_K = 0.16; // 점수가 너무 짜면 0.13, 후하면 0.19로 조절
+    const MAX_STROKES = 7;            // 최대 획수 7회
+    const PREVIEW_SECONDS = 3;        // 시작 전 미리보기 3초
+    const FACE_CROP_RATIO = 0.755;    // 하단 GANADI 글자 제외 (상단 75.5% 얼굴만 사용)
     const GRID_SIZE = 64;
     const PADDING = 8;
 
@@ -242,12 +265,7 @@
       return SCORE_TIERS.find(t => score >= t.min)?.message || SCORE_TIERS[SCORE_TIERS.length - 1].message;
     }
 
-    // Supabase 초기화
-    const isSupabaseConfigured =
-      SUPABASE_URL.startsWith('http') && !SUPABASE_KEY.includes('붙여넣기');
-    const db = isSupabaseConfigured
-      ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
-      : null;
+    const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
     // 상태 변수
     let nickname = '';
@@ -257,9 +275,15 @@
     let isDrawing = false;
     let previewInterval = null;
     let templatePoints = [];
+    let coloredTightTemplateCanvas = null; // 투명 배경 + 파란 선(여백 제거된 정답 얼굴)
     let lastResult = { score: 0, rank: 1, total: 1 };
 
     // DOM 요소
+    const mobileTabGame = document.getElementById('mobileTabGame');
+    const mobileTabRank = document.getElementById('mobileTabRank');
+    const gameSection = document.getElementById('gameSection');
+    const rankSection = document.getElementById('rankSection');
+
     const screenNickname = document.getElementById('screenNickname');
     const screenGame = document.getElementById('screenGame');
     const nicknameForm = document.getElementById('nicknameForm');
@@ -269,6 +293,7 @@
     const strokeBadge = document.getElementById('strokeBadge');
     const readyOverlay = document.getElementById('readyOverlay');
     const previewOverlay = document.getElementById('previewOverlay');
+    const previewFaceImg = document.getElementById('previewFaceImg');
     const previewTimerEl = document.getElementById('previewTimer');
     const btnStart = document.getElementById('btnStart');
     const drawingControls = document.getElementById('drawingControls');
@@ -278,7 +303,6 @@
     const resultRankEl = document.getElementById('resultRank');
     const resultMessageEl = document.getElementById('resultMessage');
     const toggleOverlay = document.getElementById('toggleOverlay');
-    const overlayTemplateImg = document.getElementById('overlayTemplateImg');
     const btnSaveResult = document.getElementById('btnSaveResult');
     const btnRetry = document.getElementById('btnRetry');
     const leaderboardList = document.getElementById('leaderboardList');
@@ -287,11 +311,34 @@
 
     const canvas = document.getElementById('drawCanvas');
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const overlayCanvas = document.getElementById('overlayCanvas');
+    const overlayCtx = overlayCanvas.getContext('2d');
 
     // =========================================================================
-    // 1. 정답 가나디 이미지(./ganadi.png) 로드 -> 하단 GANADI 글자 제외하고 얼굴만 추출
+    // 모바일 탭 전환 (🎨 그리기 / 🏆 TOP 100)
     // =========================================================================
-    function extractNormalizedPoints(sourceCanvas, isTemplateImage = false) {
+    function switchMobileTab(tab) {
+      if (tab === 'game') {
+        gameSection.classList.remove('hidden');
+        rankSection.classList.add('hidden');
+        mobileTabGame.className = 'py-2.5 text-sm font-extrabold rounded-xl bg-white text-gray-900 shadow-sm transition';
+        mobileTabRank.className = 'py-2.5 text-sm font-bold rounded-xl text-gray-600 transition';
+      } else {
+        gameSection.classList.add('hidden');
+        rankSection.classList.remove('hidden');
+        mobileTabRank.className = 'py-2.5 text-sm font-extrabold rounded-xl bg-white text-gray-900 shadow-sm transition';
+        mobileTabGame.className = 'py-2.5 text-sm font-bold rounded-xl text-gray-600 transition';
+        loadLeaderboard();
+      }
+    }
+
+    mobileTabGame.addEventListener('click', () => switchMobileTab('game'));
+    mobileTabRank.addEventListener('click', () => switchMobileTab('rank'));
+
+    // =========================================================================
+    // 1. 정답 이미지 처리: 글자 제거 -> 미리보기 이미지 + 크기 맞춤용 투명 오버레이 생성
+    // =========================================================================
+    function extractNormalizedData(sourceCanvas, isTemplateImage = false) {
       const sCtx = sourceCanvas.getContext('2d', { willReadFrequently: true });
       const { width, height } = sourceCanvas;
       const { data } = sCtx.getImageData(0, 0, width, height);
@@ -322,9 +369,11 @@
 
       const boxW = maxX - minX + 1;
       const boxH = maxY - minY + 1;
-      if (inkCount < 15 || Math.max(boxW, boxH) < 15) return [];
+      if (inkCount < 15 || Math.max(boxW, boxH) < 15) {
+        return { points: [], box: null };
+      }
 
-      // 비율 유지하며 64x64 정규화 캔버스 중앙에 배치
+      // 어떤 크기로 그리든 비율을 유지해 64x64 중앙으로 자동 확대/축소 정규화
       const normCanvas = document.createElement('canvas');
       normCanvas.width = GRID_SIZE;
       normCanvas.height = GRID_SIZE;
@@ -357,46 +406,77 @@
           }
         }
       }
-      return points;
+
+      return { points, box: { minX, minY, boxW, boxH } };
     }
 
     function loadTemplateImage() {
       const img = new Image();
       img.crossOrigin = 'anonymous';
       img.onload = () => {
-        // 하단 GANADI 글자를 제외하고 상단 얼굴 영역(75.5%)만 잘라냄
+        // 1) 하단 GANADI 글자를 잘라내고 얼굴 영역(상단 75.5%)만 복사
         const srcW = img.width;
         const srcH = Math.floor(img.height * FACE_CROP_RATIO);
 
-        const faceCanvas = document.createElement('canvas');
-        faceCanvas.width = 500;
-        faceCanvas.height = 500;
-        const fCtx = faceCanvas.getContext('2d');
-        fCtx.fillStyle = '#FFFFFF';
-        fCtx.fillRect(0, 0, 500, 500);
+        const rawFaceCanvas = document.createElement('canvas');
+        rawFaceCanvas.width = srcW;
+        rawFaceCanvas.height = srcH;
+        const rCtx = rawFaceCanvas.getContext('2d', { willReadFrequently: true });
+        rCtx.fillStyle = '#FFFFFF';
+        rCtx.fillRect(0, 0, srcW, srcH);
+        rCtx.drawImage(img, 0, 0, srcW, srcH, 0, 0, srcW, srcH);
 
-        const scale = Math.min(440 / srcW, 440 / srcH);
-        const drawW = srcW * scale;
-        const drawH = srcH * scale;
-        fCtx.drawImage(
-          img,
-          0, 0, srcW, srcH,
-          (500 - drawW) / 2, (500 - drawH) / 2, drawW, drawH
-        );
+        // 2) 얼굴 영역의 정규화 좌표 + 타이트한 경계(box) 추출
+        const { points, box } = extractNormalizedData(rawFaceCanvas, true);
+        templatePoints = points;
 
-        // 채점용 포인트 추출 (얼굴만)
-        templatePoints = extractNormalizedPoints(faceCanvas, true);
-
-        // 결과 화면 '정답 겹쳐보기' 이미지도 글자 없는 얼굴 버전으로 적용
-        try {
-          overlayTemplateImg.src = faceCanvas.toDataURL('image/png');
-        } catch {
-          overlayTemplateImg.src = './ganadi.png';
-        }
-
-        if (templatePoints.length === 0) {
+        if (!box || points.length === 0) {
           templateErrorBanner.classList.remove('hidden');
+          return;
         }
+
+        // 3) 3초 미리보기용 깔끔한 얼굴 전용 이미지 생성 (글자 없음)
+        const previewCanvas = document.createElement('canvas');
+        previewCanvas.width = 500;
+        previewCanvas.height = 500;
+        const pCtx = previewCanvas.getContext('2d');
+        pCtx.fillStyle = '#FFFFFF';
+        pCtx.fillRect(0, 0, 500, 500);
+
+        const pScale = 400 / Math.max(box.boxW, box.boxH);
+        const pW = box.boxW * pScale;
+        const pH = box.boxH * pScale;
+        pCtx.drawImage(
+          rawFaceCanvas,
+          box.minX, box.minY, box.boxW, box.boxH,
+          (500 - pW) / 2, (500 - pH) / 2, pW, pH
+        );
+        previewFaceImg.src = previewCanvas.toDataURL('image/png');
+
+        // 4) 내 그림 크기·위치에 맞춰 겹쳐볼 투명 배경 파란선 정답 캔버스 생성
+        const tightCanvas = document.createElement('canvas');
+        tightCanvas.width = box.boxW;
+        tightCanvas.height = box.boxH;
+        const tCtx = tightCanvas.getContext('2d', { willReadFrequently: true });
+        tCtx.drawImage(rawFaceCanvas, box.minX, box.minY, box.boxW, box.boxH, 0, 0, box.boxW, box.boxH);
+
+        const imgData = tCtx.getImageData(0, 0, box.boxW, box.boxH);
+        const d = imgData.data;
+        for (let i = 0; i < d.length; i += 4) {
+          const br = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+          if (d[i + 3] > 50 && br < 210) {
+            // 정답 선을 보기 편한 반투명 파란색으로 변환
+            d[i] = 37;
+            d[i + 1] = 99;
+            d[i + 2] = 235;
+            d[i + 3] = 145;
+          } else {
+            // 흰 배경은 완전 투명 처리
+            d[i + 3] = 0;
+          }
+        }
+        tCtx.putImageData(imgData, 0, 0);
+        coloredTightTemplateCanvas = tightCanvas;
       };
       img.onerror = () => {
         templateErrorBanner.classList.remove('hidden');
@@ -404,7 +484,32 @@
       img.src = './ganadi.png';
     }
 
-    // 양방향 Chamfer Distance 채점
+    // 사용자가 그린 그림의 크기와 중심 위치에 맞춰 정답 선을 오버레이 캔버스에 그리기
+    function renderMatchedOverlay(userBox) {
+      overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+      if (!coloredTightTemplateCanvas || !userBox) return;
+
+      const tw = coloredTightTemplateCanvas.width;
+      const th = coloredTightTemplateCanvas.height;
+
+      // 채점 정규화와 동일한 비율 스케일 계산
+      const scale = Math.max(userBox.boxW, userBox.boxH) / Math.max(tw, th);
+      const drawW = tw * scale;
+      const drawH = th * scale;
+
+      const centerX = userBox.minX + userBox.boxW / 2;
+      const centerY = userBox.minY + userBox.boxH / 2;
+
+      overlayCtx.drawImage(
+        coloredTightTemplateCanvas,
+        centerX - drawW / 2,
+        centerY - drawH / 2,
+        drawW,
+        drawH
+      );
+    }
+
+    // 양방향 Chamfer Distance 채점 (크기·위치 자동 정규화 반영)
     function calculateAccuracy(userPts, tmplPts) {
       if (userPts.length === 0 || tmplPts.length === 0) return 0;
 
@@ -433,7 +538,7 @@
     }
 
     // =========================================================================
-    // 2. 드로잉 캔버스 (최대 6획 제어 + 점 찍기 지원 + 멀티터치 방지)
+    // 2. 드로잉 캔버스 (최대 7획 제어 + 모바일 터치 최적화)
     // =========================================================================
     function getCanvasPos(e) {
       const rect = canvas.getBoundingClientRect();
@@ -499,7 +604,7 @@
     canvas.addEventListener('pointercancel', finishStroke);
 
     // =========================================================================
-    // 3. 게임 흐름 (3초 미리보기 포함) & Supabase 랭킹 연동
+    // 3. 게임 흐름 (3초 얼굴 미리보기 포함) & Supabase 랭킹 연동
     // =========================================================================
     function clearPreviewTimer() {
       if (previewInterval) {
@@ -516,10 +621,11 @@
       isDrawing = false;
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
+      overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
       updateStrokeUI();
 
       toggleOverlay.checked = false;
-      overlayTemplateImg.classList.add('hidden');
+      overlayCanvas.classList.add('hidden');
       previewOverlay.classList.add('hidden');
       readyOverlay.classList.remove('hidden');
       drawingControls.classList.add('hidden');
@@ -583,13 +689,16 @@
     btnRetry.addEventListener('click', resetToReady);
 
     toggleOverlay.addEventListener('change', () => {
-      overlayTemplateImg.classList.toggle('hidden', !toggleOverlay.checked);
+      overlayCanvas.classList.toggle('hidden', !toggleOverlay.checked);
     });
 
     async function runScoring() {
-      const userPoints = extractNormalizedPoints(canvas, false);
+      const { points: userPoints, box: userBox } = extractNormalizedData(canvas, false);
       const score = calculateAccuracy(userPoints, templatePoints);
       const message = getTierMessage(score);
+
+      // 내 그림 크기·위치에 딱 맞춘 파란색 정답 오버레이 미리 그려두기
+      renderMatchedOverlay(userBox);
 
       gameState = 'RESULT';
       drawingControls.classList.add('hidden');
@@ -602,38 +711,28 @@
       let myRank = 1;
       let totalCount = 1;
 
-      if (db) {
-        try {
-          const { data, error } = await db.rpc('submit_score', {
-            p_nickname: nickname,
-            p_score: score
-          });
-          if (!error && data) {
-            const row = Array.isArray(data) ? data[0] : data;
-            if (row) {
-              myRank = Number(row.my_rank);
-              totalCount = Number(row.total_count);
-            }
+      try {
+        const { data, error } = await db.rpc('submit_score', {
+          p_nickname: nickname,
+          p_score: score
+        });
+        if (!error && data) {
+          const row = Array.isArray(data) ? data[0] : data;
+          if (row) {
+            myRank = Number(row.my_rank);
+            totalCount = Number(row.total_count);
           }
-          await loadLeaderboard();
-        } catch (err) {
-          console.error('랭킹 등록 오류:', err);
         }
+        await loadLeaderboard();
+      } catch (err) {
+        console.error('랭킹 등록 오류:', err);
       }
 
       lastResult = { score, rank: myRank, total: totalCount };
-      resultRankEl.textContent = db
-        ? `전체 ${totalCount.toLocaleString()}명 중 ${myRank.toLocaleString()}위`
-        : `테스트 모드 (Supabase 키를 입력하면 전체 순위가 표시됩니다)`;
+      resultRankEl.textContent = `전체 ${totalCount.toLocaleString()}명 중 ${myRank.toLocaleString()}위`;
     }
 
     async function loadLeaderboard() {
-      if (!db) {
-        leaderboardList.innerHTML =
-          '<p class="py-10 text-center text-sm text-gray-400">코드 상단에 Supabase URL과 Key를 입력하면<br/>실시간 Top 100 랭킹이 표시됩니다.</p>';
-        return;
-      }
-
       const { data, error } = await db
         .from('rankings')
         .select('id, nickname, score')
@@ -660,7 +759,7 @@
         row.className = 'flex items-center justify-between py-2.5 px-2 hover:bg-gray-50 rounded-xl transition';
 
         const left = document.createElement('div');
-        left.className = 'flex items-center gap-3 min-w-0';
+        left.className = 'flex items-center gap-2.5 min-w-0';
 
         const medal = document.createElement('span');
         medal.className = 'w-8 text-center font-extrabold text-sm shrink-0 ' +
@@ -689,7 +788,7 @@
     btnRefreshRank.addEventListener('click', loadLeaderboard);
 
     // =========================================================================
-    // 4. 결과 이미지 카드 생성 및 저장
+    // 4. 결과 이미지 카드 생성 및 저장 (모바일 공유 시트 + PC 다운로드)
     // =========================================================================
     function drawWrappedText(c, text, x, y, maxWidth, lineHeight) {
       const words = text.split(' ');
@@ -731,6 +830,11 @@
       c.strokeRect(120, 125, 560, 560);
 
       c.drawImage(canvas, 120, 125, 560, 560);
+
+      // 정답 겹쳐보기를 켜둔 상태라면 결과 저장 카드에도 함께 합성
+      if (toggleOverlay.checked) {
+        c.drawImage(overlayCanvas, 120, 125, 560, 560);
+      }
 
       c.fillStyle = '#111827';
       c.font = '900 76px Pretendard, sans-serif';
