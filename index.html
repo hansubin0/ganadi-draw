@@ -204,4 +204,573 @@
     // Supabase 연결 설정 (적용 완료)
     // =========================================================================
     const SUPABASE_URL = 'https://opnmtqofggcmmibghttv.supabase.co';
-    const SUPABASE_KEY = 'sb_publishable_S8c_AK5mGpszlSuRgfusew_B0e9i
+    const SUPABASE_KEY = 'sb_publishable_S8c_AK5mGpszlSuRgfusew_B0e9i1CF';
+
+    // 채점 난이도 보정 상수 (점수가 너무 짜면 0.13으로 낮추고, 너무 후하면 0.19로 높이세요)
+    const SCORE_SENSITIVITY_K = 0.16;
+    const MAX_STROKES = 6;
+    const PREVIEW_SECONDS = 3; // 시작 전 미리보기 시간(초)
+    const FACE_CROP_RATIO = 0.755; // 원본 이미지 상단 75.5%만 채점에 사용 (하단 GANADI 글자 제외)
+    const GRID_SIZE = 64;
+    const PADDING = 8;
+
+    // 5% 단위 20단계 멘트
+    const SCORE_TIERS = [
+      { min: 95, message: '인간 복사기 등판... 혹시 가나디 본인? ( •̀ ω •́ )✧' },
+      { min: 90, message: '가나디 학과 수석 졸업 축하합니다 (ﾉ◕ヮ◕)ﾉ*:･ﾟ✧' },
+      { min: 85, message: '오 꽤 치는데? 가나디랑 꽤 친한 사이 ( ･ᴗ･ )و' },
+      { min: 80, message: '누가 봐도 가나디! 귀여움 한도 초과 (๑˃̵ᴗ˂̵)و' },
+      { min: 75, message: '가나디 맞긴 한데 어딘가 살짝 킹받음 ( ･ิ ͜ʖ ･ิ)' },
+      { min: 70, message: '가나디 사촌 동생 정도는 인정해 드립니다 ( ˙ ꒳ ˙ )' },
+      { min: 65, message: '멀리서 실눈 뜨고 보면 가나디 같기도...? (¬_¬ )' },
+      { min: 60, message: '가나디는 맞는데 어젯밤 라면 먹고 잔 듯 (・_・;)' },
+      { min: 55, message: '이목구비가 각자 살길 찾아 떠났어요 ( ºΔº )' },
+      { min: 50, message: '반타작 성공! 일단 강아지과 생명체는 맞음 ( ˙-˙ )' },
+      { min: 45, message: '음... 가나디가 아니라 짭나디 같은데요 ( •_•)?' },
+      { min: 40, message: '가나디가 이 그림 보고 조용히 눈물을 훔칩니다 (｡•́︿•̀｡)' },
+      { min: 35, message: '혹시 마우스 말고 발가락으로 그리셨나요? (⊙_⊙;)' },
+      { min: 30, message: '이건 좀... AI도 가나디라고 우기기 힘드네요 ( ; ˘-˘)' },
+      { min: 25, message: '새로운 종의 미확인 생명체를 창조하셨습니다 ( ﾟдﾟ)' },
+      { min: 20, message: '피카소도 기립박수 칠 파격적인 추상화 (╯°□°)╯︵ ┻━┻' },
+      { min: 15, message: '가나디: "저를 이렇게 기억하고 계셨군요..." ( •᷄⌓•᷅ )' },
+      { min: 10, message: '혹시 눈 감고 그리신 거 맞죠? 그렇다고 해줘요 ( ꒪Д꒪)' },
+      { min: 5,  message: '현대미술관에 걸면 10억은 받을 듯한 난해함 ( ˘_˘ )' },
+      { min: 0,  message: '대충 그린 거 검거 완료. 가나디한테 사과하세요 ( •̀ - •́ )' }
+    ];
+
+    function getTierMessage(score) {
+      return SCORE_TIERS.find(t => score >= t.min)?.message || SCORE_TIERS[SCORE_TIERS.length - 1].message;
+    }
+
+    // Supabase 초기화
+    const isSupabaseConfigured =
+      SUPABASE_URL.startsWith('http') && !SUPABASE_KEY.includes('붙여넣기');
+    const db = isSupabaseConfigured
+      ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
+      : null;
+
+    // 상태 변수
+    let nickname = '';
+    let gameState = 'NICKNAME'; // NICKNAME | READY | PREVIEW | DRAWING | SCORING | RESULT
+    let strokeCount = 0;
+    let activePointerId = null;
+    let isDrawing = false;
+    let previewInterval = null;
+    let templatePoints = [];
+    let lastResult = { score: 0, rank: 1, total: 1 };
+
+    // DOM 요소
+    const screenNickname = document.getElementById('screenNickname');
+    const screenGame = document.getElementById('screenGame');
+    const nicknameForm = document.getElementById('nicknameForm');
+    const nicknameInput = document.getElementById('nicknameInput');
+    const displayNickname = document.getElementById('displayNickname');
+    const btnChangeNick = document.getElementById('btnChangeNick');
+    const strokeBadge = document.getElementById('strokeBadge');
+    const readyOverlay = document.getElementById('readyOverlay');
+    const previewOverlay = document.getElementById('previewOverlay');
+    const previewTimerEl = document.getElementById('previewTimer');
+    const btnStart = document.getElementById('btnStart');
+    const drawingControls = document.getElementById('drawingControls');
+    const btnScoreNow = document.getElementById('btnScoreNow');
+    const resultPanel = document.getElementById('resultPanel');
+    const resultScoreEl = document.getElementById('resultScore');
+    const resultRankEl = document.getElementById('resultRank');
+    const resultMessageEl = document.getElementById('resultMessage');
+    const toggleOverlay = document.getElementById('toggleOverlay');
+    const overlayTemplateImg = document.getElementById('overlayTemplateImg');
+    const btnSaveResult = document.getElementById('btnSaveResult');
+    const btnRetry = document.getElementById('btnRetry');
+    const leaderboardList = document.getElementById('leaderboardList');
+    const btnRefreshRank = document.getElementById('btnRefreshRank');
+    const templateErrorBanner = document.getElementById('templateErrorBanner');
+
+    const canvas = document.getElementById('drawCanvas');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+    // =========================================================================
+    // 1. 정답 가나디 이미지(./ganadi.png) 로드 -> 하단 GANADI 글자 제외하고 얼굴만 추출
+    // =========================================================================
+    function extractNormalizedPoints(sourceCanvas, isTemplateImage = false) {
+      const sCtx = sourceCanvas.getContext('2d', { willReadFrequently: true });
+      const { width, height } = sourceCanvas;
+      const { data } = sCtx.getImageData(0, 0, width, height);
+
+      const isInk = (idx) => {
+        const r = data[idx], g = data[idx + 1], b = data[idx + 2], a = data[idx + 3];
+        if (isTemplateImage) {
+          const brightness = 0.299 * r + 0.587 * g + 0.114 * b;
+          return a > 50 && brightness < 210;
+        }
+        return a > 40;
+      };
+
+      let minX = width, minY = height, maxX = 0, maxY = 0;
+      let inkCount = 0;
+
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          if (isInk((y * width + x) * 4)) {
+            if (x < minX) minX = x;
+            if (x > maxX) maxX = x;
+            if (y < minY) minY = y;
+            if (y > maxY) maxY = y;
+            inkCount++;
+          }
+        }
+      }
+
+      const boxW = maxX - minX + 1;
+      const boxH = maxY - minY + 1;
+      if (inkCount < 15 || Math.max(boxW, boxH) < 15) return [];
+
+      // 비율 유지하며 64x64 정규화 캔버스 중앙에 배치
+      const normCanvas = document.createElement('canvas');
+      normCanvas.width = GRID_SIZE;
+      normCanvas.height = GRID_SIZE;
+      const nCtx = normCanvas.getContext('2d', { willReadFrequently: true });
+
+      if (isTemplateImage) {
+        nCtx.fillStyle = '#FFFFFF';
+        nCtx.fillRect(0, 0, GRID_SIZE, GRID_SIZE);
+      }
+
+      const targetSize = GRID_SIZE - PADDING * 2;
+      const scale = targetSize / Math.max(boxW, boxH);
+      const drawW = boxW * scale;
+      const drawH = boxH * scale;
+      const offsetX = (GRID_SIZE - drawW) / 2;
+      const offsetY = (GRID_SIZE - drawH) / 2;
+
+      nCtx.drawImage(sourceCanvas, minX, minY, boxW, boxH, offsetX, offsetY, drawW, drawH);
+
+      const normData = nCtx.getImageData(0, 0, GRID_SIZE, GRID_SIZE).data;
+      const points = [];
+      for (let y = 0; y < GRID_SIZE; y++) {
+        for (let x = 0; x < GRID_SIZE; x++) {
+          const idx = (y * GRID_SIZE + x) * 4;
+          if (isTemplateImage) {
+            const br = 0.299 * normData[idx] + 0.587 * normData[idx + 1] + 0.114 * normData[idx + 2];
+            if (br < 210) points.push([x, y]);
+          } else {
+            if (normData[idx + 3] > 35) points.push([x, y]);
+          }
+        }
+      }
+      return points;
+    }
+
+    function loadTemplateImage() {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        // 하단 GANADI 글자를 제외하고 상단 얼굴 영역(75.5%)만 잘라냄
+        const srcW = img.width;
+        const srcH = Math.floor(img.height * FACE_CROP_RATIO);
+
+        const faceCanvas = document.createElement('canvas');
+        faceCanvas.width = 500;
+        faceCanvas.height = 500;
+        const fCtx = faceCanvas.getContext('2d');
+        fCtx.fillStyle = '#FFFFFF';
+        fCtx.fillRect(0, 0, 500, 500);
+
+        const scale = Math.min(440 / srcW, 440 / srcH);
+        const drawW = srcW * scale;
+        const drawH = srcH * scale;
+        fCtx.drawImage(
+          img,
+          0, 0, srcW, srcH,
+          (500 - drawW) / 2, (500 - drawH) / 2, drawW, drawH
+        );
+
+        // 채점용 포인트 추출 (얼굴만)
+        templatePoints = extractNormalizedPoints(faceCanvas, true);
+
+        // 결과 화면 '정답 겹쳐보기' 이미지도 글자 없는 얼굴 버전으로 적용
+        try {
+          overlayTemplateImg.src = faceCanvas.toDataURL('image/png');
+        } catch {
+          overlayTemplateImg.src = './ganadi.png';
+        }
+
+        if (templatePoints.length === 0) {
+          templateErrorBanner.classList.remove('hidden');
+        }
+      };
+      img.onerror = () => {
+        templateErrorBanner.classList.remove('hidden');
+      };
+      img.src = './ganadi.png';
+    }
+
+    // 양방향 Chamfer Distance 채점
+    function calculateAccuracy(userPts, tmplPts) {
+      if (userPts.length === 0 || tmplPts.length === 0) return 0;
+
+      const avgMinDist = (fromPts, toPts) => {
+        let sum = 0;
+        for (let i = 0; i < fromPts.length; i++) {
+          const x1 = fromPts[i][0], y1 = fromPts[i][1];
+          let minSq = Infinity;
+          for (let j = 0; j < toPts.length; j++) {
+            const dx = x1 - toPts[j][0];
+            const dy = y1 - toPts[j][1];
+            const sq = dx * dx + dy * dy;
+            if (sq < minSq) minSq = sq;
+          }
+          sum += Math.sqrt(minSq);
+        }
+        return sum / fromPts.length;
+      };
+
+      const d1 = avgMinDist(userPts, tmplPts);
+      const d2 = avgMinDist(tmplPts, userPts);
+      const combined = (d1 + d2) / 2;
+
+      const raw = 100 * Math.exp(-SCORE_SENSITIVITY_K * combined);
+      return Number(Math.min(99.99, Math.max(0, raw)).toFixed(2));
+    }
+
+    // =========================================================================
+    // 2. 드로잉 캔버스 (최대 6획 제어 + 점 찍기 지원 + 멀티터치 방지)
+    // =========================================================================
+    function getCanvasPos(e) {
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x: (e.clientX - rect.left) * (canvas.width / rect.width),
+        y: (e.clientY - rect.top) * (canvas.height / rect.height)
+      };
+    }
+
+    function updateStrokeUI() {
+      strokeBadge.textContent = `${strokeCount} / ${MAX_STROKES}`;
+      btnScoreNow.disabled = strokeCount < 1;
+    }
+
+    canvas.addEventListener('pointerdown', (e) => {
+      if (gameState !== 'DRAWING' || strokeCount >= MAX_STROKES) return;
+      if (activePointerId !== null) return;
+
+      e.preventDefault();
+      activePointerId = e.pointerId;
+      isDrawing = true;
+      canvas.setPointerCapture(e.pointerId);
+
+      const pos = getCanvasPos(e);
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.lineWidth = 8;
+      ctx.strokeStyle = '#111827';
+      ctx.fillStyle = '#111827';
+
+      ctx.beginPath();
+      ctx.arc(pos.x, pos.y, 4, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.moveTo(pos.x, pos.y);
+    });
+
+    canvas.addEventListener('pointermove', (e) => {
+      if (!isDrawing || e.pointerId !== activePointerId) return;
+      e.preventDefault();
+      const pos = getCanvasPos(e);
+      ctx.lineTo(pos.x, pos.y);
+      ctx.stroke();
+    });
+
+    function finishStroke(e) {
+      if (!isDrawing || e.pointerId !== activePointerId) return;
+      isDrawing = false;
+      activePointerId = null;
+
+      strokeCount += 1;
+      updateStrokeUI();
+
+      if (strokeCount >= MAX_STROKES) {
+        gameState = 'SCORING';
+        btnScoreNow.disabled = true;
+        setTimeout(() => runScoring(), 300);
+      }
+    }
+
+    canvas.addEventListener('pointerup', finishStroke);
+    canvas.addEventListener('pointercancel', finishStroke);
+
+    // =========================================================================
+    // 3. 게임 흐름 (3초 미리보기 포함) & Supabase 랭킹 연동
+    // =========================================================================
+    function clearPreviewTimer() {
+      if (previewInterval) {
+        clearInterval(previewInterval);
+        previewInterval = null;
+      }
+    }
+
+    function resetToReady() {
+      clearPreviewTimer();
+      gameState = 'READY';
+      strokeCount = 0;
+      activePointerId = null;
+      isDrawing = false;
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      updateStrokeUI();
+
+      toggleOverlay.checked = false;
+      overlayTemplateImg.classList.add('hidden');
+      previewOverlay.classList.add('hidden');
+      readyOverlay.classList.remove('hidden');
+      drawingControls.classList.add('hidden');
+      resultPanel.classList.add('hidden');
+    }
+
+    nicknameForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const val = nicknameInput.value.trim();
+      if (!val) return;
+      nickname = val;
+      displayNickname.textContent = nickname;
+      screenNickname.classList.add('hidden');
+      screenGame.classList.remove('hidden');
+      resetToReady();
+    });
+
+    btnChangeNick.addEventListener('click', () => {
+      clearPreviewTimer();
+      gameState = 'NICKNAME';
+      screenGame.classList.add('hidden');
+      screenNickname.classList.remove('hidden');
+      nicknameInput.focus();
+    });
+
+    btnStart.addEventListener('click', () => {
+      if (templatePoints.length === 0) {
+        alert('정답 이미지(ganadi.png)가 아직 로드되지 않았습니다. GitHub에 ganadi.png를 올렸는지 확인해 주세요!');
+        return;
+      }
+
+      clearPreviewTimer();
+      gameState = 'PREVIEW';
+      readyOverlay.classList.add('hidden');
+      drawingControls.classList.add('hidden');
+      resultPanel.classList.add('hidden');
+      previewOverlay.classList.remove('hidden');
+
+      let remain = PREVIEW_SECONDS;
+      previewTimerEl.textContent = remain;
+
+      previewInterval = setInterval(() => {
+        remain -= 1;
+        if (remain > 0) {
+          previewTimerEl.textContent = remain;
+        } else {
+          clearPreviewTimer();
+          previewOverlay.classList.add('hidden');
+          gameState = 'DRAWING';
+          drawingControls.classList.remove('hidden');
+        }
+      }, 1000);
+    });
+
+    btnScoreNow.addEventListener('click', () => {
+      if (gameState !== 'DRAWING' || strokeCount < 1) return;
+      gameState = 'SCORING';
+      runScoring();
+    });
+
+    btnRetry.addEventListener('click', resetToReady);
+
+    toggleOverlay.addEventListener('change', () => {
+      overlayTemplateImg.classList.toggle('hidden', !toggleOverlay.checked);
+    });
+
+    async function runScoring() {
+      const userPoints = extractNormalizedPoints(canvas, false);
+      const score = calculateAccuracy(userPoints, templatePoints);
+      const message = getTierMessage(score);
+
+      gameState = 'RESULT';
+      drawingControls.classList.add('hidden');
+      resultPanel.classList.remove('hidden');
+
+      resultScoreEl.textContent = `${score.toFixed(2)}%`;
+      resultMessageEl.textContent = message;
+      resultRankEl.textContent = '순위 등록 중...';
+
+      let myRank = 1;
+      let totalCount = 1;
+
+      if (db) {
+        try {
+          const { data, error } = await db.rpc('submit_score', {
+            p_nickname: nickname,
+            p_score: score
+          });
+          if (!error && data) {
+            const row = Array.isArray(data) ? data[0] : data;
+            if (row) {
+              myRank = Number(row.my_rank);
+              totalCount = Number(row.total_count);
+            }
+          }
+          await loadLeaderboard();
+        } catch (err) {
+          console.error('랭킹 등록 오류:', err);
+        }
+      }
+
+      lastResult = { score, rank: myRank, total: totalCount };
+      resultRankEl.textContent = db
+        ? `전체 ${totalCount.toLocaleString()}명 중 ${myRank.toLocaleString()}위`
+        : `테스트 모드 (Supabase 키를 입력하면 전체 순위가 표시됩니다)`;
+    }
+
+    async function loadLeaderboard() {
+      if (!db) {
+        leaderboardList.innerHTML =
+          '<p class="py-10 text-center text-sm text-gray-400">코드 상단에 Supabase URL과 Key를 입력하면<br/>실시간 Top 100 랭킹이 표시됩니다.</p>';
+        return;
+      }
+
+      const { data, error } = await db
+        .from('rankings')
+        .select('id, nickname, score')
+        .order('score', { ascending: false })
+        .order('id', { ascending: true })
+        .limit(100);
+
+      if (error) {
+        leaderboardList.innerHTML =
+          '<p class="py-10 text-center text-sm text-red-400">랭킹을 불러오지 못했습니다. SQL 실행 여부를 확인해 주세요.</p>';
+        return;
+      }
+
+      if (!data || data.length === 0) {
+        leaderboardList.innerHTML =
+          '<p class="py-10 text-center text-sm text-gray-400">아직 기록이 없습니다.<br/>첫 번째 1위가 되어보세요!</p>';
+        return;
+      }
+
+      leaderboardList.innerHTML = '';
+      data.forEach((item, index) => {
+        const rank = index + 1;
+        const row = document.createElement('div');
+        row.className = 'flex items-center justify-between py-2.5 px-2 hover:bg-gray-50 rounded-xl transition';
+
+        const left = document.createElement('div');
+        left.className = 'flex items-center gap-3 min-w-0';
+
+        const medal = document.createElement('span');
+        medal.className = 'w-8 text-center font-extrabold text-sm shrink-0 ' +
+          (rank === 1 ? 'text-amber-500 text-base' :
+           rank === 2 ? 'text-gray-400 text-base' :
+           rank === 3 ? 'text-amber-700 text-base' : 'text-gray-500');
+        medal.textContent = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `${rank}위`;
+
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'font-semibold text-gray-800 truncate text-sm';
+        nameSpan.textContent = item.nickname;
+
+        left.appendChild(medal);
+        left.appendChild(nameSpan);
+
+        const scoreSpan = document.createElement('span');
+        scoreSpan.className = 'font-extrabold text-blue-600 text-sm shrink-0 ml-2';
+        scoreSpan.textContent = `${Number(item.score).toFixed(2)}%`;
+
+        row.appendChild(left);
+        row.appendChild(scoreSpan);
+        leaderboardList.appendChild(row);
+      });
+    }
+
+    btnRefreshRank.addEventListener('click', loadLeaderboard);
+
+    // =========================================================================
+    // 4. 결과 이미지 카드 생성 및 저장
+    // =========================================================================
+    function drawWrappedText(c, text, x, y, maxWidth, lineHeight) {
+      const words = text.split(' ');
+      let line = '';
+      const lines = [];
+      for (let i = 0; i < words.length; i++) {
+        const testLine = line ? `${line} ${words[i]}` : words[i];
+        if (c.measureText(testLine).width > maxWidth && line) {
+          lines.push(line);
+          line = words[i];
+        } else {
+          line = testLine;
+        }
+      }
+      if (line) lines.push(line);
+
+      const startY = y - ((lines.length - 1) * lineHeight) / 2;
+      lines.forEach((l, idx) => c.fillText(l, x, startY + idx * lineHeight));
+    }
+
+    btnSaveResult.addEventListener('click', () => {
+      const card = document.createElement('canvas');
+      card.width = 800;
+      card.height = 1080;
+      const c = card.getContext('2d');
+
+      c.fillStyle = '#FFFDF7';
+      c.fillRect(0, 0, card.width, card.height);
+
+      c.fillStyle = '#111827';
+      c.font = 'bold 38px Pretendard, sans-serif';
+      c.textAlign = 'center';
+      c.fillText(`${nickname}님의 가나디`, 400, 88);
+
+      c.fillStyle = '#FFFFFF';
+      c.fillRect(120, 125, 560, 560);
+      c.strokeStyle = '#E5E7EB';
+      c.lineWidth = 4;
+      c.strokeRect(120, 125, 560, 560);
+
+      c.drawImage(canvas, 120, 125, 560, 560);
+
+      c.fillStyle = '#111827';
+      c.font = '900 76px Pretendard, sans-serif';
+      c.fillText(`${lastResult.score.toFixed(2)}%`, 400, 790);
+
+      c.fillStyle = '#4B5563';
+      c.font = 'bold 30px Pretendard, sans-serif';
+      c.fillText(
+        `전체 ${lastResult.total.toLocaleString()}명 중 ${lastResult.rank.toLocaleString()}위`,
+        400,
+        850
+      );
+
+      c.fillStyle = '#2563EB';
+      c.font = 'bold 30px Pretendard, sans-serif';
+      drawWrappedText(c, getTierMessage(lastResult.score), 400, 955, 680, 44);
+
+      card.toBlob(async (blob) => {
+        const fileName = `ganadi-${lastResult.score.toFixed(2)}.png`;
+        const file = new File([blob], fileName, { type: 'image/png' });
+
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({ files: [file], title: '내 가나디 정확도 결과' });
+            return;
+          } catch {}
+        }
+
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        a.click();
+        URL.revokeObjectURL(url);
+      }, 'image/png');
+    });
+
+    // 초기 실행
+    loadTemplateImage();
+    loadLeaderboard();
+  </script>
+</body>
+</html>
