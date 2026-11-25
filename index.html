@@ -267,6 +267,21 @@
 
     const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+// 브라우저별 고유 식별자 자동 발급 (동명 닉네임 구분용)
+function getDeviceId() {
+  let id = localStorage.getItem('ganadi_device_id');
+  if (!id) {
+    id = (window.crypto && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : 'dev-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+    localStorage.setItem('ganadi_device_id', id);
+  }
+  return id;
+}
+const deviceId = getDeviceId();
+
+// 상태 변수
+
     // 상태 변수
     let nickname = '';
     let gameState = 'NICKNAME'; // NICKNAME | READY | PREVIEW | DRAWING | SCORING | RESULT
@@ -713,9 +728,10 @@
 
       try {
         const { data, error } = await db.rpc('submit_score', {
-          p_nickname: nickname,
-          p_score: score
-        });
+  p_device_id: deviceId,
+  p_nickname: nickname,
+  p_score: score
+});
         if (!error && data) {
           const row = Array.isArray(data) ? data[0] : data;
           if (row) {
