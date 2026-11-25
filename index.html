@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#FFFDF7" />
   <meta property="og:title" content="가나디 정확하게 그리기 테스트" />
-  <meta property="og:description" content="3초 보고 7획 안에 가나디 얼굴을 그려 정확도를 측정해 보세요!" />
+  <meta property="og:description" content="3초 보고 10획 안에 가나디 얼굴을 그려 정확도를 측정해 보세요!" />
   <title>가나디 정확하게 그리기</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -37,7 +37,7 @@
         가나디 정확하게 그리기
       </h1>
       <p class="text-xs md:text-base text-gray-500 mt-1">
-        3초 동안 기억한 뒤, <b>최대 7획</b>으로 똑같이 그려보세요!
+        3초 동안 기억한 뒤, <b>최대 10획</b>으로 똑같이 그려보세요!
       </p>
     </header>
 
@@ -99,7 +99,7 @@
             <div class="flex items-center gap-1.5 shrink-0">
               <span class="text-xs font-medium text-gray-600">획수</span>
               <span id="strokeBadge" class="px-2.5 py-1 bg-blue-100 text-blue-700 font-extrabold rounded-full text-xs md:text-sm">
-                0 / 7
+                0 / 10
               </span>
             </div>
           </div>
@@ -107,7 +107,7 @@
           <!-- 가나디 쉽게 그리는 법 팁 박스 -->
           <div class="bg-amber-50/80 border border-amber-200/80 rounded-2xl px-3.5 py-2.5 text-left">
             <div class="flex items-center justify-between">
-              <span class="text-xs font-extrabold text-amber-900">💡 7획으로 가나디 쉽게 그리는 법</span>
+              <span class="text-xs font-extrabold text-amber-900">💡 10획으로 가나디 쉽게 그리는 법</span>
               <span class="text-[11px] text-amber-700 font-medium">크기 상관없이 비율로 채점!</span>
             </div>
             <p class="text-[11px] md:text-xs text-amber-800/90 mt-1 leading-relaxed">
@@ -127,7 +127,7 @@
             <div id="readyOverlay" class="absolute inset-0 bg-white/92 backdrop-blur-[2px] flex flex-col items-center justify-center p-5 text-center space-y-4">
               <div class="space-y-2">
                 <span class="inline-block px-3.5 py-1 bg-amber-100 text-amber-800 font-bold rounded-full text-xs md:text-sm">
-                  그림 그리기 획수 : 최대 7회
+                  그림 그리기 획수 : 최대 10회
                 </span>
                 <h3 class="text-lg md:text-xl font-extrabold text-gray-900">
                   가나디 얼굴을 그려주세요!
