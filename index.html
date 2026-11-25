@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>가나디 정확하게 그리기 테스트</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+    body {
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      background-color: #FFFDF7;
+      color: #1F2937;
+    }
+    #drawCanvas {
+      touch-action: none;
+      cursor: crosshair;
+    }
+    .leaderboard-scroll::-webkit-scrollbar { width: 6px; }
+    .leaderboard-scroll::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 9999px; }
+  </style>
+</head>
+<body class="min-h-screen py-6 px-4">
+
+  <div class="max-w-5xl mx-auto">
+    <!-- 상단 타이틀 -->
+    <header class="text-center mb-6">
+      <h1 class="text-3xl md:text-4xl font-extrabold tracking-tight text-gray-900">
+        가나디 정확하게 그리기
+      </h1>
+      <p class="text-sm md:text-base text-gray-500 mt-1">
+        3초 동안 가나디를 기억한 뒤, 최대 6획 안에 똑같이 그려보세요!
+      </p>
+    </header>
+
+    <!-- 정답 이미지 미업로드 안내 배너 -->
+    <div id="templateErrorBanner" class="hidden max-w-2xl mx-auto mb-4 p-3 bg-amber-50 border border-amber-300 text-amber-800 rounded-xl text-sm text-center">
+      ⚠️ 정답 이미지(<b>ganadi.png</b>)를 찾을 수 없습니다. GitHub 보관함에 <b>ganadi.png</b> 파일을 올려주세요!
+    </div>
+
+    <!-- 메인 2단 레이아웃 -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+      <!-- 왼쪽: 게임 카드 -->
+      <main class="lg:col-span-7 bg-white rounded-3xl shadow-lg border border-gray-100 p-5 md:p-7">
+
+        <!-- [1단계] 닉네임 입력 화면 -->
+        <section id="screenNickname" class="py-10 text-center space-y-5">
+          <div class="text-5xl">🐶</div>
+          <div>
+            <h2 class="text-xl font-bold text-gray-800">도전자 닉네임을 입력해 주세요</h2>
+            <p class="text-sm text-gray-500 mt-1">최종 정확도가 오른쪽 Top 100 랭킹에 등록됩니다.</p>
+          </div>
+          <form id="nicknameForm" class="max-w-xs mx-auto space-y-3">
+            <input
+              id="nicknameInput"
+              type="text"
+              maxlength="12"
+              required
+              placeholder="닉네임 (최대 12자)"
+              class="w-full px-4 py-3 text-center text-lg font-semibold border-2 border-gray-200 rounded-2xl focus:outline-none focus:border-blue-500 transition"
+            />
+            <button
+              type="submit"
+              class="w-full py-3.5 bg-gray-900 hover:bg-black text-white font-bold rounded-2xl transition shadow-sm"
+            >
+              입장하기
+            </button>
+          </form>
+        </section>
+
+        <!-- [2~4단계] 캔버스 게임 화면 -->
+        <section id="screenGame" class="hidden space-y-4">
+          <!-- 상단 플레이어 정보 & 획수 표시 -->
+          <div class="flex items-center justify-between bg-gray-50 px-4 py-3 rounded-2xl">
+            <div class="flex items-center gap-2">
+              <span class="text-sm text-gray-500">도전자</span>
+              <span id="displayNickname" class="font-bold text-gray-900"></span>
+              <button id="btnChangeNick" class="text-xs text-gray-400 underline hover:text-gray-600 ml-1">변경</button>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-sm font-medium text-gray-600">사용 획수</span>
+              <span id="strokeBadge" class="px-3 py-1 bg-blue-100 text-blue-700 font-extrabold rounded-full text-sm">
+                0 / 6
+              </span>
+            </div>
+          </div>
+
+          <!-- 정사각형 드로잉 캔버스 박스 -->
+          <div class="relative w-full max-w-[440px] mx-auto aspect-square bg-white border-2 border-gray-200 rounded-2xl overflow-hidden shadow-inner">
+            <!-- 결과 화면에서 정답(글자 제외 얼굴만) 겹쳐보기용 이미지 -->
+            <img
+              id="overlayTemplateImg"
+              alt="정답 가나디 얼굴"
+              class="hidden absolute inset-0 w-full h-full object-contain opacity-30 pointer-events-none select-none p-8"
+            />
+
+            <!-- 실제 그림을 그리는 캔버스 -->
+            <canvas id="drawCanvas" width="500" height="500" class="w-full h-full block"></canvas>
+
+            <!-- [READY 오버레이] 그림 그리기 획수 : 최대 6회 + START 버튼 -->
+            <div id="readyOverlay" class="absolute inset-0 bg-white/90 backdrop-blur-[2px] flex flex-col items-center justify-center p-6 text-center space-y-5">
+              <div class="space-y-2">
+                <span class="inline-block px-3.5 py-1 bg-amber-100 text-amber-800 font-bold rounded-full text-sm">
+                  그림 그리기 획수 : 최대 6회
+                </span>
+                <h3 class="text-xl font-extrabold text-gray-900">
+                  가나디 얼굴을 그려주세요!
+                </h3>
+                <p class="text-xs text-gray-500 leading-relaxed">
+                  START를 누르면 가나디가 <b>3초 동안</b> 나타납니다.<br/>
+                  사라진 뒤 글자는 빼고 <b>얼굴만</b> 그려주세요!
+                </p>
+              </div>
+              <button
+                id="btnStart"
+                class="px-10 py-4 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xl font-extrabold rounded-2xl shadow-md transition"
+              >
+                START
+              </button>
+            </div>
+
+            <!-- [PREVIEW 오버레이] 시작 전 3초간 원본 가나디 사진 표시 -->
+            <div id="previewOverlay" class="hidden absolute inset-0 bg-white flex flex-col items-center justify-center p-4 select-none">
+              <div class="absolute top-3 left-1/2 -translate-x-1/2 z-10 px-4 py-1.5 bg-gray-900/90 text-white text-sm font-extrabold rounded-full shadow">
+                잘 기억하세요! <span id="previewTimer" class="text-amber-300 text-base ml-1">3</span>초
+              </div>
+              <img
+                src="./ganadi.png"
+                alt="가나디 미리보기"
+                class="w-full h-full object-contain pt-8 pb-2 pointer-events-none"
+              />
+            </div>
+          </div>
+
+          <!-- [DRAWING 컨트롤 버튼] -->
+          <div id="drawingControls" class="hidden max-w-[440px] mx-auto space-y-2">
+            <p class="text-center text-xs text-gray-400">※ 아래 GANADI 글자는 빼고 얼굴만 그려주세요</p>
+            <button
+              id="btnScoreNow"
+              disabled
+              class="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold rounded-2xl transition shadow-sm"
+            >
+              바로 채점하기
+            </button>
+          </div>
+
+          <!-- [RESULT 결과 영역] -->
+          <div id="resultPanel" class="hidden max-w-[440px] mx-auto bg-blue-50/70 border border-blue-100 rounded-2xl p-5 text-center space-y-4">
+            <div>
+              <p class="text-xs font-semibold text-blue-600 uppercase tracking-wider">정확도 측정 결과</p>
+              <div id="resultScore" class="text-5xl font-black text-gray-900 mt-1">0.00%</div>
+              <p id="resultRank" class="text-sm font-bold text-gray-600 mt-1">순위 계산 중...</p>
+            </div>
+
+            <div id="resultMessage" class="bg-white px-4 py-3 rounded-xl text-sm md:text-base font-bold text-blue-700 shadow-sm break-keep">
+            </div>
+
+            <label class="inline-flex items-center gap-2 text-xs font-semibold text-gray-600 cursor-pointer select-none">
+              <input id="toggleOverlay" type="checkbox" class="w-4 h-4 rounded accent-blue-600" />
+              정답 가나디 얼굴 겹쳐보기
+            </label>
+
+            <div class="grid grid-cols-2 gap-3 pt-1">
+              <button
+                id="btnSaveResult"
+                class="py-3 bg-gray-900 hover:bg-black text-white font-bold rounded-xl transition shadow-sm"
+              >
+                결과 저장
+              </button>
+              <button
+                id="btnRetry"
+                class="py-3 bg-white hover:bg-gray-100 text-gray-800 border border-gray-300 font-bold rounded-xl transition"
+              >
+                다시 도전
+              </button>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <!-- 오른쪽: 실시간 Top 100 랭킹 -->
+      <aside class="lg:col-span-5 bg-white rounded-3xl shadow-lg border border-gray-100 p-5 md:p-6">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-extrabold text-gray-900 flex items-center gap-2">
+            🏆 실시간 TOP 100
+          </h2>
+          <button id="btnRefreshRank" class="text-xs px-2.5 py-1 bg-gray-100 hover:bg-gray-200 text-gray-600 font-semibold rounded-lg transition">
+            새로고침
+          </button>
+        </div>
+
+        <div id="leaderboardList" class="leaderboard-scroll max-h-[560px] overflow-y-auto divide-y divide-gray-100 pr-1">
+          <p class="py-10 text-center text-sm text-gray-400">랭킹 불러오는 중...</p>
+        </div>
+      </aside>
+
+    </div>
+  </div>
+
+  <script>
+    // =========================================================================
+    // Supabase 연결 설정 (적용 완료)
+    // =========================================================================
+    const SUPABASE_URL = 'https://opnmtqofggcmmibghttv.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_S8c_AK5mGpszlSuRgfusew_B0e9i
